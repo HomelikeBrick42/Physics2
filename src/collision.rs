@@ -13,15 +13,27 @@ pub struct Collision {
     pub depth: f32,
 }
 
-pub fn get_collision<C: Collider + ?Sized>(s1: &C, s2: &C) -> Option<Collision> {
-    gjk(s1, s2).and_then(|simplex| epa(simplex.into(), s1, s2))
+pub fn get_collision<C1, C2>(c1: &C1, c2: &C2) -> Option<Collision>
+where
+    C1: Collider + ?Sized,
+    C2: Collider + ?Sized,
+{
+    gjk(c1, c2).and_then(|simplex| epa(simplex.into(), c1, c2))
 }
 
-fn support<C: Collider + ?Sized>(s1: &C, s2: &C, d: cgmath::Vector2<f32>) -> cgmath::Vector2<f32> {
-    s1.furthest_point_in_direction(d) - s2.furthest_point_in_direction(-d)
+fn support<C1, C2>(c1: &C1, c2: &C2, d: cgmath::Vector2<f32>) -> cgmath::Vector2<f32>
+where
+    C1: Collider + ?Sized,
+    C2: Collider + ?Sized,
+{
+    c1.furthest_point_in_direction(d) - c2.furthest_point_in_direction(-d)
 }
 
-fn gjk<C: Collider + ?Sized>(s1: &C, s2: &C) -> Option<[cgmath::Vector2<f32>; 3]> {
+fn gjk<C1, C2>(c1: &C1, c2: &C2) -> Option<[cgmath::Vector2<f32>; 3]>
+where
+    C1: Collider + ?Sized,
+    C2: Collider + ?Sized,
+{
     fn handle_simplex(
         simplex: &mut ArrayVec<cgmath::Vector2<f32>, 3>,
         d: &mut cgmath::Vector2<f32>,
@@ -80,12 +92,12 @@ fn gjk<C: Collider + ?Sized>(s1: &C, s2: &C) -> Option<[cgmath::Vector2<f32>; 3]
         }
     }
 
-    let mut d = (s2.center() - s1.center()).normalize();
+    let mut d = (c2.center() - c1.center()).normalize();
     let mut simplex = ArrayVec::new();
-    simplex.push(support(s1, s2, d));
+    simplex.push(support(c1, c2, d));
     d = -simplex[0];
     loop {
-        let a = support(s1, s2, d);
+        let a = support(c1, c2, d);
         if cgmath::dot(a, d) < 0.0 {
             return None;
         }
@@ -96,11 +108,11 @@ fn gjk<C: Collider + ?Sized>(s1: &C, s2: &C) -> Option<[cgmath::Vector2<f32>; 3]
     }
 }
 
-fn epa<C: Collider + ?Sized>(
-    mut polytype: Vec<cgmath::Vector2<f32>>,
-    s1: &C,
-    s2: &C,
-) -> Option<Collision> {
+fn epa<C1, C2>(mut polytype: Vec<cgmath::Vector2<f32>>, c1: &C1, c2: &C2) -> Option<Collision>
+where
+    C1: Collider + ?Sized,
+    C2: Collider + ?Sized,
+{
     let mut min_index = 0;
     let mut min_distance = f32::INFINITY;
     let mut min_normal = cgmath::vec2(0.0, 0.0);
@@ -133,7 +145,7 @@ fn epa<C: Collider + ?Sized>(
             }
         }
 
-        let support = support(s1, s2, min_normal);
+        let support = support(c1, c2, min_normal);
         let s_distance = min_normal.dot(support);
 
         if (s_distance - min_distance).abs() > 0.001 {

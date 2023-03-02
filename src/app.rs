@@ -8,75 +8,14 @@ use eframe::egui;
 use rayon::prelude::*;
 
 use crate::{
-    get_collision, CameraUniform, Collider, Renderer, StorageBufferQuad, MAX_PHYSICS_ITERATIONS,
+    get_collision, CameraUniform, Quad, Renderer, StorageBufferQuad, SweepingCollider,
+    MAX_PHYSICS_ITERATIONS,
 };
 
 pub struct Camera {
     position: cgmath::Vector2<f32>,
     rotation: f32,
     zoom: f32,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Quad {
-    pub position: cgmath::Vector2<f32>,
-    pub velocity: cgmath::Vector2<f32>,
-    pub rotation: f32,
-    pub angular_velocity: f32,
-    pub scale: cgmath::Vector2<f32>,
-    pub color: cgmath::Vector3<f32>,
-    pub dynamic: bool,
-}
-
-impl Collider for Quad {
-    fn center(&self) -> cgmath::Vector2<f32> {
-        self.position
-    }
-
-    fn furthest_point_in_direction(&self, direction: cgmath::Vector2<f32>) -> cgmath::Vector2<f32> {
-        let points = [
-            cgmath::vec2(-self.scale.x * 0.5, -self.scale.y * 0.5),
-            cgmath::vec2(-self.scale.x * 0.5, self.scale.y * 0.5),
-            cgmath::vec2(self.scale.x * 0.5, -self.scale.y * 0.5),
-            cgmath::vec2(self.scale.x * 0.5, self.scale.y * 0.5),
-        ]
-        .map(|point| {
-            // Rotate the points
-            cgmath::vec2(
-                point.x * (-self.rotation).cos() - point.y * (-self.rotation).sin(),
-                point.y * (-self.rotation).cos() + point.x * (-self.rotation).sin(),
-            )
-        })
-        .map(|point| {
-            // Translate the points
-            point + self.position
-        });
-
-        let mut current_point = points[0];
-        let mut max_dot = points[0].dot(direction);
-        for &point in &points[1..] {
-            let dot = point.dot(direction);
-            if dot > max_dot {
-                current_point = point;
-                max_dot = dot;
-            }
-        }
-        current_point
-    }
-}
-
-impl Default for Quad {
-    fn default() -> Self {
-        Self {
-            position: cgmath::vec2(0.0, 0.0),
-            velocity: cgmath::vec2(0.0, 0.0),
-            rotation: 0.0,
-            angular_velocity: 0.0,
-            scale: cgmath::vec2(1.0, 1.0),
-            color: cgmath::vec3(1.0, 1.0, 1.0),
-            dynamic: true,
-        }
-    }
 }
 
 pub struct App {
@@ -170,12 +109,29 @@ impl App {
                         .enumerate()
                         .map(|(index, &(mut quad))| {
                             if quad.dynamic {
+                                let mut position_delta = cgmath::vec2(0.0, 0.0);
                                 let mut velocity_delta = cgmath::vec2(0.0, 0.0);
 
                                 // TODO: spacial hashing so we dont have to iterate through every object in the scene
                                 for (other_index, other) in self.old_quads.iter().enumerate() {
                                     if other_index != index {
-                                        if let Some(collision) = get_collision(&quad, other) {
+                                        let sweeping_collider = SweepingCollider {
+                                            collider: &quad,
+                                            position_a: quad.position,
+                                            position_b: (quad.position + position_delta)
+                                                + (quad.velocity + velocity_delta) * ts,
+                                        };
+
+                                        let sweeping_collider_other = SweepingCollider {
+                                            collider: other,
+                                            position_a: other.position,
+                                            position_b: other.position + other.velocity * ts,
+                                        };
+
+                                        if let Some(collision) = get_collision(
+                                            &sweeping_collider,
+                                            &sweeping_collider_other,
+                                        ) {
                                             let relative_velocity = other.velocity - quad.velocity;
                                             let collision_normal_velocity_length =
                                                 relative_velocity.dot(-collision.normal);
@@ -186,9 +142,13 @@ impl App {
                                                 let dynamic_count =
                                                     quad.dynamic as usize + other.dynamic as usize;
 
-                                                // Move the quad out of collision
-                                                quad.position -= collision.normal * collision.depth
-                                                    / dynamic_count as _;
+                                                if let Some(collision) = get_collision(&quad, other)
+                                                {
+                                                    // Move the quad out of collision
+                                                    position_delta -= collision.normal
+                                                        * collision.depth
+                                                        / dynamic_count as _;
+                                                }
 
                                                 // Stop movement in that direction
                                                 velocity_delta -= (-relative_velocity)
@@ -199,6 +159,7 @@ impl App {
                                     }
                                 }
 
+                                quad.position += position_delta;
                                 quad.velocity += velocity_delta;
                             }
                             quad
