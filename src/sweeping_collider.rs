@@ -2,7 +2,7 @@ use cgmath::prelude::*;
 
 use crate::Collider;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct SweepingCollider<'a, C: Collider + ?Sized> {
     pub collider: &'a C,
     pub position_a: cgmath::Vector2<f32>,
@@ -15,12 +15,10 @@ impl<'a, C: Collider + ?Sized> Collider for SweepingCollider<'a, C> {
     }
 
     fn furthest_point_in_direction(&self, direction: cgmath::Vector2<f32>) -> cgmath::Vector2<f32> {
-        let point_a = (self.collider.furthest_point_in_direction(direction)
-            - self.collider.center())
-            + self.position_a;
-        let point_b = (self.collider.furthest_point_in_direction(direction)
-            - self.collider.center())
-            + self.position_b;
+        let furthest_point =
+            self.collider.furthest_point_in_direction(direction) - self.collider.center();
+        let point_a = furthest_point + self.position_a;
+        let point_b = furthest_point + self.position_b;
 
         let distance_a = point_a.dot(direction);
         let distance_b = point_b.dot(direction);
