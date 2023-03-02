@@ -8,7 +8,7 @@ use eframe::egui;
 use rayon::prelude::*;
 
 use crate::{
-    get_collision, CameraUniform, Quad, Renderer, StorageBufferQuad, SweepingCollider,
+    get_collision, CameraUniform, Collider, Quad, Renderer, StorageBufferQuad, SweepingCollider,
     MAX_PHYSICS_ITERATIONS,
 };
 
@@ -25,6 +25,7 @@ pub struct App {
     settings_window_open: bool,
     quads_window_open: bool,
     physics_enabled: bool,
+    sweeping_colliders: bool,
     gravity: cgmath::Vector2<f32>,
     camera: Camera,
     quads: Vec<Quad>,
@@ -54,6 +55,7 @@ impl App {
             settings_window_open: false,
             quads_window_open: false,
             physics_enabled: false,
+            sweeping_colliders: false,
             gravity: cgmath::vec2(0.0, -9.81),
             camera: Camera {
                 position: cgmath::vec2(0.0, 0.0),
@@ -128,10 +130,18 @@ impl App {
                                             position_b: other.position + other.velocity * ts,
                                         };
 
-                                        if let Some(collision) = get_collision(
-                                            &sweeping_collider,
-                                            &sweeping_collider_other,
-                                        ) {
+                                        let (collider_a, collider_b): (
+                                            &dyn Collider,
+                                            &dyn Collider,
+                                        ) = if self.sweeping_colliders {
+                                            (&sweeping_collider, &sweeping_collider_other)
+                                        } else {
+                                            (&quad, other)
+                                        };
+
+                                        if let Some(collision) =
+                                            get_collision(collider_a, collider_b)
+                                        {
                                             let relative_velocity = other.velocity - quad.velocity;
                                             let collision_normal_velocity_length =
                                                 relative_velocity.dot(-collision.normal);
@@ -250,6 +260,10 @@ impl eframe::App for App {
                             .speed(0.1)
                             .prefix("y: "),
                     );
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Sweeping Colliders: ");
+                    ui.checkbox(&mut self.sweeping_colliders, "");
                 });
                 ui.allocate_space(ui.available_size());
             });
