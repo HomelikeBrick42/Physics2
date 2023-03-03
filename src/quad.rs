@@ -1,8 +1,9 @@
 use cgmath::prelude::*;
+use serde::{Serialize, Deserialize};
 
 use crate::Collider;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Quad {
     pub position: cgmath::Vector2<f32>,
     pub velocity: cgmath::Vector2<f32>,

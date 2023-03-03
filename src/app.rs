@@ -6,20 +6,25 @@ use std::sync::{
 use cgmath::prelude::*;
 use eframe::egui;
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     get_collision, CameraUniform, Collider, Quad, Renderer, StorageBufferQuad, SweepingCollider,
     MAX_PHYSICS_ITERATIONS,
 };
 
+#[derive(Serialize, Deserialize)]
 pub struct Camera {
     position: cgmath::Vector2<f32>,
     rotation: f32,
     zoom: f32,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct App {
+    #[serde(skip, default = "std::time::Instant::now")]
     last_time: std::time::Instant,
+    #[serde(skip)]
     fixed_update_time: std::time::Duration,
     info_window_open: bool,
     settings_window_open: bool,
@@ -32,22 +37,8 @@ pub struct App {
     old_quads: Vec<Quad>,
 }
 
-impl App {
-    pub fn new(cc: &eframe::CreationContext) -> Self {
-        {
-            let render_state = cc.wgpu_render_state.as_ref().unwrap();
-            let renderer = Renderer::new(
-                &render_state.device,
-                &render_state.queue,
-                render_state.target_format,
-            );
-            render_state
-                .renderer
-                .write()
-                .paint_callback_resources
-                .insert(renderer);
-        }
-
+impl Default for App {
+    fn default() -> Self {
         Self {
             last_time: std::time::Instant::now(),
             fixed_update_time: std::time::Duration::ZERO,
@@ -84,6 +75,32 @@ impl App {
             ],
             old_quads: vec![],
         }
+    }
+}
+
+impl App {
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        {
+            let render_state = cc.wgpu_render_state.as_ref().unwrap();
+            let renderer = Renderer::new(
+                &render_state.device,
+                &render_state.queue,
+                render_state.target_format,
+            );
+            let old_value = render_state
+                .renderer
+                .write()
+                .paint_callback_resources
+                .insert(renderer);
+            assert!(old_value.is_none());
+        }
+
+        cc.storage
+            .map(|s| serde_json::from_str(s.get_string("App").as_deref().unwrap_or("")))
+            .transpose()
+            .ok()
+            .flatten()
+            .unwrap_or_default()
     }
 
     fn update(&mut self, _ts: f32) {}
@@ -461,5 +478,10 @@ impl eframe::App for App {
         if self.physics_enabled {
             ctx.request_repaint();
         }
+    }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string("App", serde_json::to_string(self).unwrap());
+        storage.flush();
     }
 }
