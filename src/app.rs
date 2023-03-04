@@ -293,8 +293,9 @@ impl eframe::App for App {
                         self.quads.push(Quad::default());
                     }
                     let mut quads_to_delete = vec![];
-                    for (i, quad) in self.quads.iter_mut().enumerate() {
+                    for i in 0..self.quads.len() {
                         egui::CollapsingHeader::new(format!("Quad {i}")).show(ui, |ui| {
+                            let quad = &mut self.quads[i];
                             ui.horizontal(|ui| {
                                 ui.label("Position: ");
                                 ui.add(
@@ -372,6 +373,12 @@ impl eframe::App for App {
                                 ui.label("Dynamic: ");
                                 ui.checkbox(&mut quad.dynamic, "");
                             });
+                            if ui.button("Duplicate").clicked() {
+                                let mut copy = *quad;
+                                copy.position = cgmath::vec2(0.0, 0.0);
+                                copy.rotation = 0.0;
+                                self.quads.push(copy);
+                            }
                             if ui.button("Delete").clicked() {
                                 quads_to_delete.push(i);
                             }
